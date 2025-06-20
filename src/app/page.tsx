@@ -145,8 +145,15 @@ export default function R2DJHome() {
         <footer className="mt-16 pt-8 border-t border-white/10 text-center">
           <div className="flex items-center justify-center gap-4 text-gray-400">
             <span>Built with Next.js + Tone.js</span>
-            <Github size={16} />
-            <span>Open Source</span>
+            <a 
+              href="https://github.com/allinfinite/R2DJ" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 hover:text-white transition-colors"
+            >
+              <Github size={16} />
+              <span>Open Source</span>
+            </a>
           </div>
           <p className="text-sm text-gray-500 mt-2">
             &quot;Where emotion meets sound, consciousness expands.&quot;

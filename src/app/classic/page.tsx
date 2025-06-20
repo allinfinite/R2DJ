@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { LiveAmbientSlicer } from '@/components/LiveAmbientSlicer';
-import { Home } from 'lucide-react';
+import { Home, Github } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ClassicPage() {
@@ -17,9 +17,20 @@ export default function ClassicPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-white">R2DJ</h1>
-          <Link href="/" className="text-white/70 hover:text-white transition-colors">
-            <Home size={20} />
-          </Link>
+          <div className="flex items-center gap-4">
+            <a 
+              href="https://github.com/allinfinite/R2DJ" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-white/70 hover:text-white transition-colors"
+              title="View on GitHub"
+            >
+              <Github size={20} />
+            </a>
+            <Link href="/" className="text-white/70 hover:text-white transition-colors" title="Home">
+              <Home size={20} />
+            </Link>
+          </div>
         </div>
 
         {/* Live Ambient Instructions */}
