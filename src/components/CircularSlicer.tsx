@@ -123,7 +123,7 @@ export function CircularSlicer({
         {audioSlices.map((slice, index) => {
           const { x, y } = getSlicePosition(index, audioSlices.length);
           const isSelected = selectedSlices.has(slice.id);
-          const keyboardKey = Array.from(keyboardMap.entries()).find(([key, id]) => id === slice.id)?.[0];
+          const keyboardKey = Array.from(keyboardMap.entries()).find(([, id]) => id === slice.id)?.[0];
           
           return (
             <g key={slice.id}>

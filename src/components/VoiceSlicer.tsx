@@ -389,7 +389,7 @@ export function VoiceSlicer({
       }
     };
 
-    const handleKeyUp = (event: KeyboardEvent) => {
+    const handleKeyUp = () => {
       // Optional: could add key release handling for sustained sounds
     };
 
@@ -532,8 +532,8 @@ export function VoiceSlicer({
             </div>
           ) : (
             <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto">
-              {audioSlices.map((slice, index) => {
-                const keyboardKey = Array.from(keyboardMap.entries()).find(([key, id]) => id === slice.id)?.[0];
+              {audioSlices.map((slice) => {
+                const keyboardKey = Array.from(keyboardMap.entries()).find(([, id]) => id === slice.id)?.[0];
                 return (
                   <button
                     key={slice.id}

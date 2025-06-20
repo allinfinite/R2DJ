@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Mic, MicOff, Play, Pause, Square } from 'lucide-react';
+import { Mic, MicOff, Play, Square } from 'lucide-react';
 import * as Tone from 'tone';
 
 interface VoiceLoopTestProps {

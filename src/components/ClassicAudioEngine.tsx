@@ -326,7 +326,7 @@ export function ClassicAudioEngine({
           });
           audioDataToSend = Array.from(freqDataArray);
           
-        } catch (error) {
+        } catch {
           
         }
       }
