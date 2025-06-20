@@ -38,6 +38,7 @@ export function LiveAmbientSlicer({
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [ambientVolume, setAmbientVolume] = useState(0.3);
   const [feedbackIntensity, setFeedbackIntensity] = useState(0.5);
+  const [outputVolume, setOutputVolume] = useState(0.7); // Master output volume
   const [chaos, setChaos] = useState({ x: chaosX, y: chaosY });
   const [reverb, setReverb] = useState(reverbAmount);
   const [delay, setDelay] = useState(delayAmount);
@@ -51,8 +52,6 @@ export function LiveAmbientSlicer({
   const keyboardMapRef = useRef<Map<string, string>>(new Map());
   
   // Live recording state
-  const recordingBufferRef = useRef<Float32Array[]>([]);
-  const lastSliceTimeRef = useRef(0);
   const isListeningRef = useRef(false);
 
   const addDebug = useCallback((message: string) => {
@@ -80,7 +79,8 @@ export function LiveAmbientSlicer({
       const filter = new Tone.Filter(800, 'lowpass');
       const distortion = new Tone.Distortion(0.1);
       const delay = new Tone.PingPongDelay(0.25, 0.2);
-      const ambientGain = new Tone.Gain(ambientVolume).toDestination();
+      const ambientGain = new Tone.Gain(ambientVolume);
+      const masterOutput = new Tone.Gain(0.7).toDestination(); // Master output volume - start with safe level
       
       // Create reverb with shorter decay and wait for it to be ready
       const reverb = new Tone.Reverb(1.5);
@@ -93,12 +93,18 @@ export function LiveAmbientSlicer({
         distortion,
         reverb,
         delay,
-        ambientGain
+        ambientGain,
+        masterOutput
       };
       
-      // Connect effects chain
-      filter.chain(distortion, reverb, delay, ambientGain);
+      // Connect effects chain with master output at the end
+      filter.chain(distortion, reverb, delay, ambientGain, masterOutput);
       addDebug('Effects connected');
+      
+      // Set initial volumes
+      ambientGain.gain.value = ambientVolume;
+      masterOutput.gain.value = outputVolume;
+      addDebug(`Volumes set - Ambient: ${ambientVolume}, Master: ${outputVolume}`);
       
       setIsInitialized(true);
       addDebug('✅ Audio system ready');
@@ -107,7 +113,7 @@ export function LiveAmbientSlicer({
       addDebug(`❌ Audio init failed: ${error instanceof Error ? error.message : 'Unknown'}`);
       setIsInitialized(false);
     }
-  }, [bpm, ambientVolume, addDebug]);
+  }, [bpm, ambientVolume, outputVolume, addDebug]);
 
   // Continuous audio analysis
   const startLiveAnalysis = useCallback(async () => {
@@ -161,7 +167,7 @@ export function LiveAmbientSlicer({
     } catch (error) {
       addDebug(`Live analysis failed: ${error instanceof Error ? error.message : 'Unknown'}`);
     }
-  }, []);
+  }, [addDebug]);
 
   // Process live audio buffer into slices
   const processLiveAudioBuffer = useCallback((audioBuffer: AudioBuffer) => {
@@ -208,7 +214,7 @@ export function LiveAmbientSlicer({
     }
     
     addDebug(`Live slice: ${category} ${duration.toFixed(1)}s`);
-  }, []);
+  }, [addDebug]);
 
 
 
@@ -395,7 +401,8 @@ export function LiveAmbientSlicer({
     'minimal': {
       name: 'Minimal',
       ambientVolume: 0.2,
-      feedbackIntensity: 0.4, // Increased from 0.2
+      feedbackIntensity: 0.4,
+      outputVolume: 0.5, // Quieter for minimal
       chaos: { x: 0.3, y: 0.1 },
       reverb: 0.8,
       delay: 0.2,
@@ -403,8 +410,9 @@ export function LiveAmbientSlicer({
     },
     'balanced': {
       name: 'Balanced',
-      ambientVolume: 0.4, // Increased from 0.3
-      feedbackIntensity: 0.6, // Increased from 0.5
+      ambientVolume: 0.4,
+      feedbackIntensity: 0.6,
+      outputVolume: 0.7, // Standard level
       chaos: { x: 0.5, y: 0.3 },
       reverb: 0.5,
       delay: 0.4,
@@ -412,8 +420,9 @@ export function LiveAmbientSlicer({
     },
     'dense': {
       name: 'Dense',
-      ambientVolume: 0.6, // Increased from 0.5
-      feedbackIntensity: 0.9, // Increased from 0.8
+      ambientVolume: 0.6,
+      feedbackIntensity: 0.9,
+      outputVolume: 0.8, // Louder for dense textures
       chaos: { x: 0.7, y: 0.6 },
       reverb: 0.4,
       delay: 0.7,
@@ -421,8 +430,9 @@ export function LiveAmbientSlicer({
     },
     'ethereal': {
       name: 'Ethereal',
-      ambientVolume: 0.5, // Increased from 0.4
-      feedbackIntensity: 0.5, // Increased from 0.3
+      ambientVolume: 0.5,
+      feedbackIntensity: 0.5,
+      outputVolume: 0.6, // Medium level for ethereal
       chaos: { x: 0.2, y: 0.1 },
       reverb: 0.9,
       delay: 0.3,
@@ -430,8 +440,9 @@ export function LiveAmbientSlicer({
     },
     'glitchy': {
       name: 'Glitchy',
-      ambientVolume: 0.7, // Increased from 0.6
-      feedbackIntensity: 0.8, // Increased from 0.7
+      ambientVolume: 0.7,
+      feedbackIntensity: 0.8,
+      outputVolume: 0.9, // Loudest for glitchy chaos
       chaos: { x: 0.8, y: 0.9 },
       reverb: 0.2,
       delay: 0.8,
@@ -447,12 +458,13 @@ export function LiveAmbientSlicer({
     setCurrentPreset(presetName);
     setAmbientVolume(preset.ambientVolume);
     setFeedbackIntensity(preset.feedbackIntensity);
+    setOutputVolume(preset.outputVolume);
     setChaos(preset.chaos);
     setReverb(preset.reverb);
     setDelay(preset.delay);
     
     addDebug(`Applied preset: ${preset.name}`);
-  }, [addDebug]);
+  }, [addDebug, ambientPresets]);
 
   // Handle chaos pad interaction
   const handleChaosTouch = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -492,7 +504,12 @@ export function LiveAmbientSlicer({
     if (effectsRef.current.ambientGain?.gain) {
       effectsRef.current.ambientGain.gain.value = ambientVolume;
     }
-  }, [chaos.x, chaos.y, reverb, delay, ambientVolume, isInitialized]);
+    
+    if (effectsRef.current.masterOutput?.gain) {
+      effectsRef.current.masterOutput.gain.value = outputVolume;
+      console.log('Master output updated to:', outputVolume);
+    }
+  }, [chaos.x, chaos.y, reverb, delay, ambientVolume, outputVolume, isInitialized]);
 
   // Age slices over time
   useEffect(() => {
@@ -533,7 +550,7 @@ export function LiveAmbientSlicer({
         
         <div className="text-center">
           <p className="text-white/70 text-sm">
-            🎵 Click "START LIVE" to initialize audio system
+            🎵 Click &quot;START LIVE&quot; to initialize audio system
           </p>
           <p className="text-white/50 text-xs mt-1">
             (Browser requires user interaction to start audio)
@@ -637,6 +654,19 @@ export function LiveAmbientSlicer({
 
         {/* Right - Sliders */}
         <div className="space-y-3 text-white text-sm">
+          <div>
+            <label className="block mb-1 font-semibold text-yellow-300">🔊 Output Volume: {Math.round(outputVolume * 100)}%</label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={outputVolume}
+              onChange={(e) => setOutputVolume(parseFloat(e.target.value))}
+              className="w-full h-3 bg-yellow-400/20 rounded-lg appearance-none cursor-pointer border border-yellow-400/30"
+            />
+          </div>
+          
           <div>
             <label className="block mb-1">Ambient Volume: {Math.round(ambientVolume * 100)}%</label>
             <input
