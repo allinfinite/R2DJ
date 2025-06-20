@@ -45,6 +45,43 @@ export function ClassicVoiceInput({
     }, 1000);
   };
 
+  // Test microphone sensitivity
+  const testMicrophone = () => {
+    if (!analyserRef.current) {
+      addDebug('No analyser for test');
+      return;
+    }
+    
+    addDebug('🧪 Testing microphone sensitivity...');
+    
+    // Force a single analysis frame to check raw values
+    const bufferLength = analyserRef.current.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    const waveformArray = new Uint8Array(analyserRef.current.fftSize);
+    
+    analyserRef.current.getByteFrequencyData(dataArray);
+    analyserRef.current.getByteTimeDomainData(waveformArray);
+    
+    // Check raw values
+    const freqValues = Array.from(dataArray).slice(0, 10);
+    const waveValues = Array.from(waveformArray).slice(0, 10);
+    
+    addDebug(`Freq data sample: [${freqValues.join(', ')}]`);
+    addDebug(`Wave data sample: [${waveValues.join(', ')}]`);
+    
+    // Calculate current levels
+    const freqSum = dataArray.reduce((a, b) => a + b, 0);
+    const waveVariance = waveformArray.reduce((sum, val) => sum + Math.abs(val - 128), 0);
+    
+    addDebug(`Freq sum: ${freqSum}, Wave variance: ${waveVariance}`);
+    
+    if (freqSum === 0 && waveVariance === 0) {
+      addDebug('❌ No audio signal detected - check microphone permissions or hardware');
+    } else {
+      addDebug('✅ Audio signal present - adjusting sensitivity...');
+    }
+  };
+
   const startListening = async () => {
     try {
       setPermissionStatus('🎤 Requesting microphone access...');
@@ -229,6 +266,7 @@ export function ClassicVoiceInput({
     const waveformArray = new Uint8Array(analyserRef.current.fftSize);
     
     let frameCount = 0;
+    let lastVolumeUpdate = 0;
     
     const analyze = () => {
       if (!analyserRef.current || !isListening) return;
@@ -241,39 +279,40 @@ export function ClassicVoiceInput({
       // Get time domain data for waveform
       analyserRef.current.getByteTimeDomainData(waveformArray);
       
-      // Calculate multiple volume metrics
+      // FORCE volume calculation from frequency data (more reliable)
       let freqSum = 0;
       let freqMax = 0;
-      for (let i = 0; i < bufferLength; i++) {
+      for (let i = 0; i < Math.min(bufferLength, 512); i++) { // Focus on lower frequencies
         freqSum += dataArray[i];
         freqMax = Math.max(freqMax, dataArray[i]);
       }
-      const freqAvg = freqSum / bufferLength / 255;
-      const freqPeak = freqMax / 255;
       
-      // Time domain RMS
-      let timeDomainSum = 0;
-      let timeDomainMax = 0;
-      for (let i = 0; i < waveformArray.length; i++) {
-        const sample = Math.abs((waveformArray[i] - 128) / 128);
-        timeDomainSum += sample * sample;
-        timeDomainMax = Math.max(timeDomainMax, sample);
-      }
-      const timeDomainRMS = Math.sqrt(timeDomainSum / waveformArray.length);
+      // Calculate volume from frequency data (this is working based on your test)
+      const freqVolume = freqSum / (Math.min(bufferLength, 512) * 255);
+      const peakVolume = freqMax / 255;
       
-      // Use the most sensitive measurement
-      const calculatedVolume = Math.max(freqAvg, freqPeak, timeDomainRMS);
+      // Use frequency-based volume (since that's what's working in your test)
+      const calculatedVolume = Math.max(freqVolume, peakVolume) * 5; // 5x amplification
       
+      // FORCE update volume regardless of value
       setVolume(calculatedVolume);
       onVoiceVolume(calculatedVolume);
       
-      // Debug every 60 frames (about 1 second)
-      if (frameCount % 60 === 0) {
-        addDebug(`Vol: freq=${freqAvg.toFixed(3)}, peak=${freqPeak.toFixed(3)}, rms=${timeDomainRMS.toFixed(3)}, final=${calculatedVolume.toFixed(3)}`);
+      const now = Date.now();
+      
+      // Debug more frequently and show all values
+      if (frameCount % 20 === 0 || (now - lastVolumeUpdate) > 500) {
+        lastVolumeUpdate = now;
+        addDebug(`🎤 LIVE: freq=${freqSum}, peak=${freqMax}, vol=${calculatedVolume.toFixed(4)}`);
+        
+        // Force debug if any audio detected
+        if (freqSum > 100) {
+          addDebug(`🔊 STRONG SIGNAL: ${freqSum} (vol: ${calculatedVolume.toFixed(4)})`);
+        }
       }
       
-      // Draw waveform
-      drawWaveform(waveformArray);
+      // Draw waveform (use frequency data if wave data is flat)
+      drawWaveform(waveformArray, dataArray);
       
       // Track volume history for cadence detection
       volumeHistoryRef.current.push(calculatedVolume);
@@ -281,10 +320,10 @@ export function ClassicVoiceInput({
         volumeHistoryRef.current.shift();
       }
       
-      // Simple cadence detection
+      // Simple cadence detection with lower threshold
       if (volumeHistoryRef.current.length >= 10) {
         const recentVolumes = volumeHistoryRef.current.slice(-10);
-        const peaks = recentVolumes.filter(v => v > 0.02).length;
+        const peaks = recentVolumes.filter(v => v > 0.005).length; // Very low threshold
         
         if (peaks > 7) {
           onVoiceCadence('fast');
@@ -301,7 +340,7 @@ export function ClassicVoiceInput({
     analyze();
   };
 
-  const drawWaveform = (dataArray: Uint8Array) => {
+  const drawWaveform = (waveformArray: Uint8Array, freqArray?: Uint8Array) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -323,17 +362,31 @@ export function ClassicVoiceInput({
     ctx.lineTo(width, height / 2);
     ctx.stroke();
 
+    // Check if waveform data is meaningful (not all 127s/128s)
+    const waveVariance = waveformArray.reduce((sum, val) => sum + Math.abs(val - 128), 0);
+    const useFreqData = waveVariance < 100 && freqArray; // If wave data is flat, use frequency data
+    
+    const dataToUse = useFreqData ? freqArray : waveformArray;
+    const dataLength = dataToUse.length;
+
     // Draw waveform
     ctx.lineWidth = 2;
-    ctx.strokeStyle = volume > 0.01 ? '#10b981' : '#6b7280';
+    ctx.strokeStyle = volume > 0.005 ? '#10b981' : '#6b7280';
     ctx.beginPath();
 
-    const sliceWidth = width / dataArray.length;
+    const sliceWidth = width / Math.min(dataLength, 512); // Limit for performance
     let x = 0;
 
-    for (let i = 0; i < dataArray.length; i++) {
-      const v = dataArray[i] / 128.0;
-      const y = (v * height) / 2;
+    for (let i = 0; i < Math.min(dataLength, 512); i++) {
+      let y;
+      if (useFreqData && freqArray) {
+        // For frequency data, draw from bottom up
+        y = height - (freqArray[i] / 255) * height;
+      } else {
+        // For time domain data, center around middle
+        const v = waveformArray[i] / 128.0;
+        y = (v * height) / 2;
+      }
 
       if (i === 0) {
         ctx.moveTo(x, y);
@@ -347,9 +400,9 @@ export function ClassicVoiceInput({
     ctx.stroke();
 
     // Draw volume indicator
-    if (volume > 0.005) {
-      ctx.fillStyle = `rgba(16, 185, 129, ${Math.min(volume * 5, 1)})`;
-      ctx.fillRect(0, 0, width * Math.min(volume * 20, 1), 4);
+    if (volume > 0.001) {
+      ctx.fillStyle = `rgba(16, 185, 129, ${Math.min(volume * 2, 1)})`;
+      ctx.fillRect(0, 0, width * Math.min(volume * 50, 1), 4);
     }
   };
 
@@ -378,6 +431,16 @@ export function ClassicVoiceInput({
         <div className="text-xs text-center text-white/70 p-2 bg-black/20 rounded">
           {permissionStatus}
         </div>
+      )}
+
+      {/* Microphone Test Button */}
+      {isListening && (
+        <button
+          onClick={testMicrophone}
+          className="w-full p-2 bg-orange-500 hover:bg-orange-600 rounded-lg font-medium text-white text-sm"
+        >
+          🧪 TEST MIC LEVELS
+        </button>
       )}
 
       {/* Debug Info */}
