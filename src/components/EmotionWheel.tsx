@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface EmotionWheelProps {
   emotion: { valence: number; arousal: number };
@@ -11,7 +11,7 @@ export function EmotionWheel({ emotion, onChange }: EmotionWheelProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const drawWheel = () => {
+  const drawWheel = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -75,7 +75,7 @@ export function EmotionWheel({ emotion, onChange }: EmotionWheelProps) {
     ctx.rotate(Math.PI / 2);
     ctx.fillText('Positive', 0, 0);
     ctx.restore();
-  };
+  }, [emotion]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -113,7 +113,7 @@ export function EmotionWheel({ emotion, onChange }: EmotionWheelProps) {
 
   useEffect(() => {
     drawWheel();
-  }, [emotion]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [drawWheel]);
 
   return (
     <div className="flex flex-col items-center">

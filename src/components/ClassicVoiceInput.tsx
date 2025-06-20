@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Mic, MicOff } from 'lucide-react';
 
 interface ClassicVoiceInputProps {
@@ -27,10 +27,10 @@ export function ClassicVoiceInput({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Debug logging function
-  const addDebug = (message: string) => {
+  const addDebug = useCallback((message: string) => {
     console.log('[MIC DEBUG]', message);
     setDebugInfo(prev => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`]);
-  };
+  }, []);
 
   // Manual trigger functions
   const triggerManualVolume = (vol: number) => {
@@ -228,7 +228,7 @@ export function ClassicVoiceInput({
     }
   };
 
-  const stopListening = () => {
+  const stopListening = useCallback(() => {
     addDebug('Stopping microphone...');
     
     if (streamRef.current) {
@@ -254,7 +254,7 @@ export function ClassicVoiceInput({
     setVolume(0);
     setPermissionStatus('');
     onVoiceVolume(0);
-  };
+  }, [addDebug, onVoiceVolume]);
 
   const analyzeAudio = () => {
     if (!analyserRef.current) {

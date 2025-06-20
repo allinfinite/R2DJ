@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import * as Tone from 'tone';
 import { Music, Volume2, VolumeX } from 'lucide-react';
 
@@ -92,7 +92,7 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
     }
   };
 
-  const generateMusic = () => {
+  const generateMusic = useCallback(() => {
     if (!isInitialized || !synthsRef.current) return;
 
     const pack = moodPacks[moodPack as keyof typeof moodPacks] || moodPacks['cosmic-temple'];
@@ -121,9 +121,9 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
       const leadNote = Tone.Frequency(leadFreq, 'hz').toNote();
       synthsRef.current.lead.triggerAttackRelease(leadNote, '8n');
     }
-  };
+  }, [isInitialized, moodPack, emotion]);
 
-  const updateVisualizer = () => {
+  const updateVisualizer = useCallback(() => {
     if (analyserRef.current && isPlaying) {
       const values = analyserRef.current.getValue();
       if (Array.isArray(values)) {
@@ -131,7 +131,7 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
       }
     }
     animationFrameRef.current = requestAnimationFrame(updateVisualizer);
-  };
+  }, [isPlaying, onAudioData]);
 
   useEffect(() => {
     if (isPlaying && isInitialized) {
@@ -145,7 +145,7 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
         }
       };
     }
-  }, [isPlaying, emotion, moodPack, isInitialized]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPlaying, isInitialized, generateMusic, updateVisualizer]);
 
   useEffect(() => {
     return () => {

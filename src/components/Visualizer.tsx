@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 interface VisualizerProps {
@@ -131,7 +131,7 @@ export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
     }
   };
 
-  const animate = () => {
+  const animate = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas || !showVisual) return;
     
@@ -153,7 +153,7 @@ export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
     if (isPlaying) {
       animationFrameRef.current = requestAnimationFrame(animate);
     }
-  };
+  }, [showVisual, visualMode, isPlaying, audioData, emotion]);
 
   useEffect(() => {
     if (isPlaying && showVisual) {
@@ -165,7 +165,7 @@ export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPlaying, audioData, emotion, visualMode, showVisual]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isPlaying, animate]);
 
   const visualModes = [
     { key: 'waveform', label: 'Waveform' },
