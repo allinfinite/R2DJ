@@ -2,6 +2,8 @@
 
 > An AI-powered, emotion-responsive music generator that enhances psychedelic and meditative experiences by dynamically generating or remixing sound based on real-time emotional cues.
 
+**🌐 Try R2DJ Live: [https://r2dj.dnalevity.com](https://r2dj.dnalevity.com)**
+
 ![R2DJ Interface](./docs/screenshot.png)
 
 ## 🎯 Overview
