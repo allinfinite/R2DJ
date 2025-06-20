@@ -60,34 +60,52 @@ export function LiveAmbientSlicer({
     setDebugInfo(prev => [...prev.slice(-2), `${new Date().toLocaleTimeString().slice(-5)}: ${message}`]);
   }, []);
 
-  // Initialize audio system
+  // Initialize audio system (called only after user interaction)
   const initializeAudio = useCallback(async () => {
     try {
-      await Tone.start();
-      Tone.Transport.bpm.value = bpm;
+      addDebug('🎵 Starting audio system...');
       
+      // Start Tone.js audio context (requires user gesture)
+      await Tone.start();
+      addDebug('Audio context started');
+      
+      Tone.Transport.bpm.value = bpm;
+      addDebug('BPM set');
+      
+      // Create microphone
       micRef.current = new Tone.UserMedia();
+      addDebug('Microphone created');
+      
+      // Create effects with shorter initialization times
+      const filter = new Tone.Filter(800, 'lowpass');
+      const distortion = new Tone.Distortion(0.1);
+      const delay = new Tone.PingPongDelay(0.25, 0.2);
+      const ambientGain = new Tone.Gain(ambientVolume).toDestination();
+      
+      // Create reverb with shorter decay and wait for it to be ready
+      const reverb = new Tone.Reverb(1.5);
+      addDebug('Generating reverb...');
+      await reverb.generate();
+      addDebug('Reverb ready');
       
       effectsRef.current = {
-        filter: new Tone.Filter(800, 'lowpass'),
-        distortion: new Tone.Distortion(0.1),
-        reverb: new Tone.Reverb(3),
-        delay: new Tone.PingPongDelay(0.25, 0.2),
-        ambientGain: new Tone.Gain(ambientVolume).toDestination()
+        filter,
+        distortion,
+        reverb,
+        delay,
+        ambientGain
       };
       
-      effectsRef.current.filter
-        .chain(
-          effectsRef.current.distortion,
-          effectsRef.current.reverb,
-          effectsRef.current.delay,
-          effectsRef.current.ambientGain
-        );
+      // Connect effects chain
+      filter.chain(distortion, reverb, delay, ambientGain);
+      addDebug('Effects connected');
       
       setIsInitialized(true);
-      addDebug('Live ambient system ready');
+      addDebug('✅ Audio system ready');
     } catch (error) {
-      addDebug(`Init failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+      console.error('Audio init error:', error);
+      addDebug(`❌ Audio init failed: ${error instanceof Error ? error.message : 'Unknown'}`);
+      setIsInitialized(false);
     }
   }, [bpm, ambientVolume, addDebug]);
 
@@ -176,7 +194,7 @@ export function LiveAmbientSlicer({
     
     setAudioSlices(prev => {
       const newSlices = [...prev, slice];
-      return newSlices.slice(-12); // Keep only last 12 slices
+      return newSlices.slice(-20); // Keep more slices for richer layering
     });
     
     const player = new Tone.Player(slice.buffer).connect(effectsRef.current.filter);
@@ -184,43 +202,105 @@ export function LiveAmbientSlicer({
     
     startAmbientLoop(slice);
     
+    // Add a secondary "texture" loop for continuous ambient fill
+    if (slice.category === 'tonal' || slice.category === 'noise') {
+      startTextureLoop(slice);
+    }
+    
     addDebug(`Live slice: ${category} ${duration.toFixed(1)}s`);
   }, []);
 
 
 
-  // Start ambient loop for a slice
+  // Start ambient loop for a slice - much more active and layered
   const startAmbientLoop = useCallback((slice: AudioSlice) => {
     const player = playersRef.current.get(slice.id);
     if (!player) return;
     
-    const baseInterval = slice.category === 'percussive' ? '4n' : '2m';
+    // Much shorter, more frequent intervals based on category
+    const baseInterval = slice.category === 'percussive' ? '8n' : 
+                        slice.category === 'tonal' ? '4n' :
+                        slice.category === 'voice' ? '2n' : '4n';
     
     const loop = new Tone.Loop((time) => {
-      const shouldPlay = Math.random() < (feedbackIntensity * 0.3 + 0.1);
+      // Much higher probability of playing - creates denser ambient texture
+      const baseProbability = slice.category === 'percussive' ? 0.4 : 
+                             slice.category === 'tonal' ? 0.6 :
+                             slice.category === 'voice' ? 0.3 : 0.5;
+      
+      const shouldPlay = Math.random() < (baseProbability + feedbackIntensity * 0.4);
       
       if (shouldPlay) {
-        const playbackRate = Math.random() * 0.4 + 0.8;
+        // More varied playback rates for richer textures
+        const playbackRate = slice.category === 'tonal' ? 
+          Math.random() * 0.8 + 0.6 : // Slower for tonal = more ethereal
+          Math.random() * 0.6 + 0.7;   // Normal range for others
+        
         player.playbackRate = playbackRate;
         
-        const ageVolume = Math.max(0.1, 1 - (slice.age / 30));
-        const categoryVolume = slice.category === 'voice' ? 0.3 : 0.2;
-        player.volume.value = -20 + (ageVolume * categoryVolume * ambientVolume * 20);
+        // Better volume scaling - less harsh aging, more present
+        const ageVolume = Math.max(0.3, 1 - (slice.age / 45)); // Slower fade, higher minimum
+        const categoryVolume = slice.category === 'voice' ? 0.4 : 
+                              slice.category === 'tonal' ? 0.5 :
+                              slice.category === 'percussive' ? 0.3 : 0.4;
+        
+        // Less extreme volume range, more audible
+        player.volume.value = -15 + (ageVolume * categoryVolume * ambientVolume * 15);
         
         player.start(time);
       }
     }, baseInterval);
     
-    loop.start(Math.random() * 2);
+    // Start immediately with small random offset
+    loop.start(Math.random() * 0.5);
     loopsRef.current.set(slice.id, loop);
     
+    // Longer lifetime for more sustained ambient texture
     setTimeout(() => {
       loop.stop();
       loop.dispose();
       loopsRef.current.delete(slice.id);
       playersRef.current.delete(slice.id);
       player.dispose();
-    }, 30000);
+    }, 45000); // Extended from 30s to 45s
+    
+  }, [feedbackIntensity, ambientVolume]);
+
+  // Secondary texture loop for continuous ambient fill
+  const startTextureLoop = useCallback((slice: AudioSlice) => {
+    const player = playersRef.current.get(slice.id);
+    if (!player) return;
+    
+    // Very frequent, quiet texture fills
+    const textureInterval = '16n'; // Very fast for continuous texture
+    
+    const textureLoop = new Tone.Loop((time) => {
+      // Lower probability but very frequent = continuous texture
+      const shouldPlay = Math.random() < (0.15 + feedbackIntensity * 0.1);
+      
+      if (shouldPlay) {
+        // Slower, more ethereal playback for texture
+        const playbackRate = Math.random() * 0.3 + 0.4; // Much slower
+        player.playbackRate = playbackRate;
+        
+        // Very quiet, just texture
+        const ageVolume = Math.max(0.2, 1 - (slice.age / 45));
+        player.volume.value = -25 + (ageVolume * ambientVolume * 8); // Much quieter
+        
+        player.start(time);
+      }
+    }, textureInterval);
+    
+    // Start with random offset
+    textureLoop.start(Math.random() * 0.2);
+    loopsRef.current.set(`${slice.id}_texture`, textureLoop);
+    
+    // Same lifetime as main loop
+    setTimeout(() => {
+      textureLoop.stop();
+      textureLoop.dispose();
+      loopsRef.current.delete(`${slice.id}_texture`);
+    }, 45000);
     
   }, [feedbackIntensity, ambientVolume]);
 
@@ -289,11 +369,19 @@ export function LiveAmbientSlicer({
       stopLiveSystem();
       setIsLive(false);
     } else {
-      await startLiveAnalysis();
-      Tone.Transport.start();
-      setIsLive(true);
+      // Initialize audio system first if needed (requires user gesture)
+      if (!isInitialized) {
+        await initializeAudio();
+      }
+      
+      // Only proceed if initialization was successful
+      if (isInitialized) {
+        await startLiveAnalysis();
+        Tone.Transport.start();
+        setIsLive(true);
+      }
     }
-  }, [isLive, stopLiveSystem, startLiveAnalysis]);
+  }, [isLive, stopLiveSystem, startLiveAnalysis, isInitialized, initializeAudio]);
 
   const clearAllSlices = useCallback(() => {
     stopLiveSystem();
@@ -302,52 +390,52 @@ export function LiveAmbientSlicer({
     addDebug('All slices cleared');
   }, [stopLiveSystem, addDebug]);
 
-  // Ambient presets
+  // Ambient presets - updated for richer ambient generation
   const ambientPresets = {
     'minimal': {
       name: 'Minimal',
-      ambientVolume: 0.1,
-      feedbackIntensity: 0.2,
+      ambientVolume: 0.2,
+      feedbackIntensity: 0.4, // Increased from 0.2
       chaos: { x: 0.3, y: 0.1 },
       reverb: 0.8,
       delay: 0.2,
-      description: 'Sparse, clean ambient textures'
+      description: 'Clean ambient textures with subtle activity'
     },
     'balanced': {
       name: 'Balanced',
-      ambientVolume: 0.3,
-      feedbackIntensity: 0.5,
+      ambientVolume: 0.4, // Increased from 0.3
+      feedbackIntensity: 0.6, // Increased from 0.5
       chaos: { x: 0.5, y: 0.3 },
       reverb: 0.5,
       delay: 0.4,
-      description: 'Perfect balance of feedback and space'
+      description: 'Rich balance of feedback and space'
     },
     'dense': {
       name: 'Dense',
-      ambientVolume: 0.5,
-      feedbackIntensity: 0.8,
+      ambientVolume: 0.6, // Increased from 0.5
+      feedbackIntensity: 0.9, // Increased from 0.8
       chaos: { x: 0.7, y: 0.6 },
       reverb: 0.4,
       delay: 0.7,
-      description: 'Rich, layered ambient soundscapes'
+      description: 'Thick, layered ambient soundscapes'
     },
     'ethereal': {
       name: 'Ethereal',
-      ambientVolume: 0.4,
-      feedbackIntensity: 0.3,
+      ambientVolume: 0.5, // Increased from 0.4
+      feedbackIntensity: 0.5, // Increased from 0.3
       chaos: { x: 0.2, y: 0.1 },
       reverb: 0.9,
       delay: 0.3,
-      description: 'Dreamy, spacious atmospheres'
+      description: 'Dreamy, continuous atmospheres'
     },
     'glitchy': {
       name: 'Glitchy',
-      ambientVolume: 0.6,
-      feedbackIntensity: 0.7,
+      ambientVolume: 0.7, // Increased from 0.6
+      feedbackIntensity: 0.8, // Increased from 0.7
       chaos: { x: 0.8, y: 0.9 },
       reverb: 0.2,
       delay: 0.8,
-      description: 'Chaotic, digital textures'
+      description: 'Chaotic, dense digital textures'
     }
   };
 
@@ -420,18 +508,37 @@ export function LiveAmbientSlicer({
     return () => clearInterval(ageInterval);
   }, [isLive]);
 
+  // Cleanup on unmount
   useEffect(() => {
-    initializeAudio();
     return () => {
       stopLiveSystem();
       Object.values(effectsRef.current).forEach(effect => effect?.dispose?.());
     };
-  }, [initializeAudio, stopLiveSystem]);
+  }, [stopLiveSystem]);
 
   if (!isInitialized) {
     return (
-      <div className="p-4 bg-white/10 backdrop-blur-md rounded-xl">
-        <p className="text-white">Initializing Live Ambient System...</p>
+      <div className="p-4 bg-white/10 backdrop-blur-md rounded-xl space-y-4">
+        <h3 className="text-white text-lg font-semibold">🌊 Live Ambient R2DJ</h3>
+        
+        <div className="flex gap-2">
+          <button
+            onClick={toggleLiveMode}
+            className="flex-1 p-3 rounded-lg font-medium transition-all flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white"
+          >
+            <Play size={16} />
+            START LIVE
+          </button>
+        </div>
+        
+        <div className="text-center">
+          <p className="text-white/70 text-sm">
+            🎵 Click "START LIVE" to initialize audio system
+          </p>
+          <p className="text-white/50 text-xs mt-1">
+            (Browser requires user interaction to start audio)
+          </p>
+        </div>
       </div>
     );
   }
