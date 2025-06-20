@@ -15,6 +15,15 @@ export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
   const [visualMode, setVisualMode] = useState<'waveform' | 'particles' | 'mandala'>('waveform');
   const [showVisual, setShowVisual] = useState(true);
 
+  // Debug: log when audio data changes
+  useEffect(() => {
+    console.log('Visualizer: Audio data updated:', audioData.length, 'samples, playing:', isPlaying);
+    if (audioData.length > 0) {
+      console.log('Visualizer: Sample values:', audioData.slice(0, 10));
+      console.log('Visualizer: Max/Min values:', Math.max(...audioData), Math.min(...audioData));
+    }
+  }, [audioData, isPlaying]);
+
   const drawWaveform = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
     const width = canvas.width;
     const height = canvas.height;
@@ -27,7 +36,35 @@ export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
 
-    if (audioData.length === 0) return;
+    // Show debug info if no audio data
+    if (audioData.length === 0) {
+      ctx.fillStyle = 'white';
+      ctx.font = '12px Arial';
+      if (isPlaying) {
+        ctx.fillText('Waiting for audio data...', 10, 20);
+      } else {
+        ctx.fillText('Click START to begin visualization', 10, 20);
+      }
+      
+      // Show a simple static pattern when not playing
+      if (!isPlaying) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const centerY = height / 2;
+        ctx.moveTo(0, centerY);
+        for (let x = 0; x < width; x += 10) {
+          ctx.lineTo(x, centerY + Math.sin(x * 0.1) * 20);
+        }
+        ctx.stroke();
+      }
+      return;
+    }
+
+    // Debug: show audio data info
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.font = '10px Arial';
+    ctx.fillText(`Audio: ${audioData.length} samples, max: ${Math.max(...audioData).toFixed(1)}`, 5, height - 5);
 
     // Draw waveform
     ctx.strokeStyle = `hsla(${300 + emotion.valence * 60}, 80%, ${50 + emotion.arousal * 30}%, 0.8)`;

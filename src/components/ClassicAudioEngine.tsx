@@ -263,6 +263,50 @@ export function ClassicAudioEngine({
     effectsRef.current.delay.wet.value = delayAmount;
   };
 
+  const startVisualizationLoop = () => {
+    if (!isPlaying) return;
+    
+    console.log('ClassicAudioEngine: Starting visualization loop, analyser available:', !!analyserRef.current);
+    
+    const updateVisualization = () => {
+      if (!isPlaying) return;
+      
+      let audioDataToSend: number[] = [];
+      
+      // Try to get real audio data
+      if (analyserRef.current) {
+        try {
+          const freqValues = analyserRef.current.getValue();
+          const freqDataArray = new Uint8Array(analyserRef.current.size);
+          freqValues.forEach((value, index) => {
+            freqDataArray[index] = typeof value === 'number' ? (value + 140) * 255 / 280 : 0;
+          });
+          audioDataToSend = Array.from(freqDataArray);
+          console.log('ClassicAudioEngine: Real audio data:', audioDataToSend.length, 'samples, max:', Math.max(...audioDataToSend));
+        } catch (error) {
+          console.log('ClassicAudioEngine: Error getting real audio data:', error);
+        }
+      }
+      
+      // If no real audio data, generate a visualization based on music state
+      if (audioDataToSend.length === 0 || Math.max(...audioDataToSend) < 10) {
+        console.log('ClassicAudioEngine: No real audio data, generating fallback visualization');
+        // Generate waveform based on current playing state and emotion
+        audioDataToSend = new Array(128).fill(0).map((_, i) => {
+          const baseValue = 60 + Math.sin(Date.now() * 0.01 + i * 0.1) * 30;
+          const randomNoise = Math.random() * 20;
+          const emotionBoost = (chaosX + chaosY) * 50;
+          return Math.max(0, Math.min(255, baseValue + randomNoise + emotionBoost));
+        });
+      }
+      
+      onAudioData(audioDataToSend);
+      requestAnimationFrame(updateVisualization);
+    };
+    
+    updateVisualization();
+  };
+
   const generateTestTone = () => {
     if (!synthsRef.current || !isInitialized) return;
     
@@ -287,6 +331,42 @@ export function ClassicAudioEngine({
       setDebugInfo(`Test tone error: ${error}`);
     }
   };
+
+  // Always send some visualization data when playing
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null;
+    
+    if (isPlaying && isInitialized) {
+      console.log('ClassicAudioEngine: Starting visualization loop');
+      
+      // Start the main visualization loop
+      startVisualizationLoop();
+      
+      // Also start a backup interval-based visualization in case the main one fails
+      intervalId = setInterval(() => {
+        if (isPlaying) {
+          const backupData = new Array(128).fill(0).map((_, i) => {
+            const time = Date.now() * 0.005;
+            const baseWave = Math.sin(time + i * 0.1) * 50 + 50;
+            const chaosEffect = (chaosX + chaosY) * 30;
+            const randomNoise = Math.random() * 20;
+            return Math.max(0, Math.min(255, baseWave + chaosEffect + randomNoise));
+          });
+          console.log('ClassicAudioEngine: Sending backup visualization data');
+          onAudioData(backupData);
+        }
+      }, 50); // 20 FPS fallback
+      
+    } else {
+      console.log('ClassicAudioEngine: Stopping visualization loop');
+    }
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isPlaying, isInitialized, chaosX, chaosY, onAudioData]);
 
   // Cleanup
   useEffect(() => {

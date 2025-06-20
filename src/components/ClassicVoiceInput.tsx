@@ -25,6 +25,7 @@ export function ClassicVoiceInput({
   const animationFrameRef = useRef<number | null>(null);
   const volumeHistoryRef = useRef<number[]>([]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const isAnalyzingRef = useRef<boolean>(false);
 
   // Debug logging function
   const addDebug = useCallback((message: string) => {
@@ -199,8 +200,12 @@ export function ClassicVoiceInput({
       addDebug('Audio graph connected');
 
       setIsListening(true);
+      isAnalyzingRef.current = true;
       setPermissionStatus('🎧 Listening for audio...');
+      
+      console.log('ClassicVoiceInput: About to call analyzeAudio()');
       analyzeAudio();
+      console.log('ClassicVoiceInput: analyzeAudio() called');
       
     } catch (error: unknown) {
       console.error('Microphone error:', error);
@@ -231,6 +236,8 @@ export function ClassicVoiceInput({
   const stopListening = useCallback(() => {
     addDebug('Stopping microphone...');
     
+    isAnalyzingRef.current = false;
+    
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -257,22 +264,37 @@ export function ClassicVoiceInput({
   }, [addDebug, onVoiceVolume]);
 
   const analyzeAudio = () => {
+    console.log('ClassicVoiceInput: analyzeAudio() function called');
+    
     if (!analyserRef.current) {
+      console.log('ClassicVoiceInput: No analyser available');
       addDebug('No analyser available');
       return;
     }
 
+    console.log('ClassicVoiceInput: Setting up analysis loop');
+    
     const bufferLength = analyserRef.current.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
     const waveformArray = new Uint8Array(analyserRef.current.fftSize);
+    
+    console.log('ClassicVoiceInput: Analysis setup complete - bufferLength:', bufferLength, 'fftSize:', analyserRef.current.fftSize);
     
     let frameCount = 0;
     let lastVolumeUpdate = 0;
     
     const analyze = () => {
-      if (!analyserRef.current || !isListening) return;
+      if (!analyserRef.current || !isAnalyzingRef.current) {
+        console.log('ClassicVoiceInput: Analyze loop stopping - analyser:', !!analyserRef.current, 'isAnalyzing:', isAnalyzingRef.current);
+        return;
+      }
       
       frameCount++;
+      
+      // Debug every 60 frames (about once per second)
+      if (frameCount % 60 === 0) {
+        console.log('ClassicVoiceInput: Analysis loop running, frame:', frameCount);
+      }
       
       // Get frequency data for volume calculation
       analyserRef.current.getByteFrequencyData(dataArray);
@@ -295,7 +317,8 @@ export function ClassicVoiceInput({
       // Use frequency-based volume (since that's what's working in your test)
       const calculatedVolume = Math.max(freqVolume, peakVolume) * 5; // 5x amplification
       
-      // FORCE update volume regardless of value
+      // FORCE update volume regardless of value and add debugging
+      console.log('ClassicVoiceInput: Volume calculation - freqSum:', freqSum, 'freqMax:', freqMax, 'calculatedVolume:', calculatedVolume);
       setVolume(calculatedVolume);
       onVoiceVolume(calculatedVolume);
       
@@ -338,18 +361,28 @@ export function ClassicVoiceInput({
       animationFrameRef.current = requestAnimationFrame(analyze);
     };
     
+    console.log('ClassicVoiceInput: Starting analyze loop');
     analyze();
   };
 
   const drawWaveform = (waveformArray: Uint8Array, freqArray?: Uint8Array) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) {
+      console.log('ClassicVoiceInput: No canvas reference for waveform');
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.log('ClassicVoiceInput: No canvas context for waveform');
+      return;
+    }
 
     const width = canvas.width;
     const height = canvas.height;
+    
+    // Debug canvas size
+    console.log('ClassicVoiceInput: Drawing waveform on canvas', width, 'x', height, 'volume:', volume);
 
     // Clear canvas with slight fade effect
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
@@ -362,6 +395,11 @@ export function ClassicVoiceInput({
     ctx.moveTo(0, height / 2);
     ctx.lineTo(width, height / 2);
     ctx.stroke();
+    
+    // ALWAYS draw something to show canvas is working
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.font = '10px Arial';
+    ctx.fillText(`Canvas: ${width}x${height} Vol: ${volume.toFixed(4)}`, 5, 15);
 
     // Check if waveform data is meaningful (not all 127s/128s)
     const waveVariance = waveformArray.reduce((sum, val) => sum + Math.abs(val - 128), 0);
