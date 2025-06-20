@@ -314,11 +314,15 @@ export function ClassicVoiceInput({
       const freqVolume = freqSum / (Math.min(bufferLength, 512) * 255);
       const peakVolume = freqMax / 255;
       
-      // Use frequency-based volume (since that's what's working in your test)
-      const calculatedVolume = Math.max(freqVolume, peakVolume) * 5; // 5x amplification
+      // Multiple volume calculation approaches
+      const freqBasedVolume = Math.max(freqVolume, peakVolume) * 10; // 10x amplification
+      const rawSumVolume = (freqSum / 100000); // Direct sum approach
+      const maxBasedVolume = (freqMax / 255) * 3; // Peak-based approach
       
-      // FORCE update volume regardless of value and add debugging
-      console.log('ClassicVoiceInput: Volume calculation - freqSum:', freqSum, 'freqMax:', freqMax, 'calculatedVolume:', calculatedVolume);
+      // Use the highest volume from all approaches
+      const calculatedVolume = Math.max(freqBasedVolume, rawSumVolume, maxBasedVolume);
+      
+             // FORCE update volume regardless of value
       setVolume(calculatedVolume);
       onVoiceVolume(calculatedVolume);
       
@@ -327,11 +331,12 @@ export function ClassicVoiceInput({
       // Debug more frequently and show all values
       if (frameCount % 20 === 0 || (now - lastVolumeUpdate) > 500) {
         lastVolumeUpdate = now;
-        addDebug(`🎤 LIVE: freq=${freqSum}, peak=${freqMax}, vol=${calculatedVolume.toFixed(4)}`);
+        addDebug(`🎤 LIVE: sum=${freqSum}, peak=${freqMax}`);
+        addDebug(`📊 VOL: freq=${freqBasedVolume.toFixed(4)}, raw=${rawSumVolume.toFixed(4)}, peak=${maxBasedVolume.toFixed(4)}, final=${calculatedVolume.toFixed(4)}`);
         
         // Force debug if any audio detected
         if (freqSum > 100) {
-          addDebug(`🔊 STRONG SIGNAL: ${freqSum} (vol: ${calculatedVolume.toFixed(4)})`);
+          addDebug(`🔊 STRONG SIGNAL: ${freqSum} → final vol: ${calculatedVolume.toFixed(4)}`);
         }
       }
       
@@ -367,22 +372,15 @@ export function ClassicVoiceInput({
 
   const drawWaveform = (waveformArray: Uint8Array, freqArray?: Uint8Array) => {
     const canvas = canvasRef.current;
-    if (!canvas) {
-      console.log('ClassicVoiceInput: No canvas reference for waveform');
-      return;
-    }
+    if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      console.log('ClassicVoiceInput: No canvas context for waveform');
-      return;
-    }
+    if (!ctx) return;
 
     const width = canvas.width;
     const height = canvas.height;
     
-    // Debug canvas size
-    console.log('ClassicVoiceInput: Drawing waveform on canvas', width, 'x', height, 'volume:', volume);
+
 
     // Clear canvas with slight fade effect
     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
@@ -396,10 +394,7 @@ export function ClassicVoiceInput({
     ctx.lineTo(width, height / 2);
     ctx.stroke();
     
-    // ALWAYS draw something to show canvas is working
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.font = '10px Arial';
-    ctx.fillText(`Canvas: ${width}x${height} Vol: ${volume.toFixed(4)}`, 5, 15);
+
 
     // Check if waveform data is meaningful (not all 127s/128s)
     const waveVariance = waveformArray.reduce((sum, val) => sum + Math.abs(val - 128), 0);

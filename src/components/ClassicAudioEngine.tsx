@@ -45,10 +45,13 @@ export function ClassicAudioEngine({
   
   // Pitch tracking
   const pitchHistoryRef = useRef<number[]>([]);
+  const isVoiceAnalyzingRef = useRef<boolean>(false);
 
   const initializeAudio = async () => {
     try {
+      // Start Tone.js with user interaction
       await Tone.start();
+      console.log('ClassicAudioEngine: Tone.js started successfully, context state:', Tone.getContext().state);
       setDebugInfo('Tone.js started');
       
       // Create master output
@@ -135,11 +138,17 @@ export function ClassicAudioEngine({
   };
 
   const startVoiceProcessing = async () => {
+    console.log('ClassicAudioEngine: startVoiceProcessing called - current state:', isVoiceProcessingEnabled);
     try {
       voiceInputRef.current = new Tone.UserMedia();
       await voiceInputRef.current.open();
       voiceInputRef.current.connect(pitchAnalyserRef.current!);
+      console.log('ClassicAudioEngine: Voice input connected successfully');
+      
+      // Set both state and ref immediately
       setIsVoiceProcessingEnabled(true);
+      isVoiceAnalyzingRef.current = true;
+      console.log('ClassicAudioEngine: Voice processing enabled, starting analysis immediately...');
       startVoiceAnalysis();
     } catch (error: unknown) {
       console.error('Failed to start voice processing:', error);
@@ -147,6 +156,11 @@ export function ClassicAudioEngine({
   };
 
   const stopVoiceProcessing = () => {
+    console.log('ClassicAudioEngine: stopVoiceProcessing called');
+    
+    // Stop analysis immediately
+    isVoiceAnalyzingRef.current = false;
+    
     if (voiceInputRef.current) {
       voiceInputRef.current.close();
       voiceInputRef.current = null;
@@ -165,19 +179,35 @@ export function ClassicAudioEngine({
   };
 
   const startVoiceAnalysis = () => {
-    if (!pitchAnalyserRef.current || !isVoiceProcessingEnabled) return;
+    console.log('ClassicAudioEngine: startVoiceAnalysis called - pitchAnalyser:', !!pitchAnalyserRef.current, 'isVoiceAnalyzingRef:', isVoiceAnalyzingRef.current);
+    
+    if (!pitchAnalyserRef.current || !isVoiceAnalyzingRef.current) {
+      console.log('ClassicAudioEngine: Cannot start voice analysis - missing requirements');
+      return;
+    }
 
     const bufferLength = pitchAnalyserRef.current.size;
     const dataArray = new Float32Array(bufferLength);
     const freqDataArray = new Uint8Array(pitchAnalyserRef.current.size);
+    
+    console.log('ClassicAudioEngine: Voice analysis setup complete, starting analysis loop');
 
     const analyze = () => {
-      if (!pitchAnalyserRef.current || !isVoiceProcessingEnabled) return;
+      if (!pitchAnalyserRef.current || !isVoiceAnalyzingRef.current) {
+        console.log('ClassicAudioEngine: Voice analysis stopped - analyser:', !!pitchAnalyserRef.current, 'analyzing:', isVoiceAnalyzingRef.current);
+        return;
+      }
 
       // Get audio data
       pitchAnalyserRef.current.getValue().forEach((value, index) => {
         dataArray[index] = typeof value === 'number' ? value : 0;
       });
+      
+      // Debug: Check if we're getting any audio data
+      const audioSum = dataArray.reduce((sum, val) => sum + Math.abs(val), 0);
+      if (audioSum > 0) {
+        console.log('ClassicAudioEngine: Voice analysis detecting audio, sum:', audioSum);
+      }
 
       // Get frequency data for visualization
       if (analyserRef.current) {
@@ -190,8 +220,9 @@ export function ClassicAudioEngine({
 
       // Detect pitch
       const pitch = detectPitch(dataArray, 44100);
+      console.log('ClassicAudioEngine: Pitch detection - detected:', pitch, 'voiceVolume (prop):', voiceVolume);
       
-      if (pitch > 80 && pitch < 2000) {
+      if (pitch > 80 && pitch < 2000 && voiceVolume > 0.05) {
         setDetectedPitch(pitch);
         pitchHistoryRef.current.push(pitch);
         
@@ -202,8 +233,12 @@ export function ClassicAudioEngine({
         const avgPitch = pitchHistoryRef.current.reduce((a, b) => a + b, 0) / pitchHistoryRef.current.length;
         const rootNote = frequencyToNote(avgPitch);
         
-        // Generate music
+        console.log('ClassicAudioEngine: Generating music - pitch:', avgPitch, 'note:', rootNote, 'volume:', voiceVolume);
+        
+        // Generate music - use the prop volume, not a locally calculated one
         generateMusicFromVoice(rootNote, voiceVolume);
+      } else {
+        console.log('ClassicAudioEngine: Pitch out of range or too quiet - pitch:', pitch, 'volume:', voiceVolume, 'threshold: 0.05');
       }
 
       // Update effects from chaos pad and knobs
@@ -216,34 +251,42 @@ export function ClassicAudioEngine({
   };
 
   const generateMusicFromVoice = (rootNote: string, volume: number) => {
+    console.log('ClassicAudioEngine: generateMusicFromVoice called - note:', rootNote, 'volume:', volume, 'isPlaying:', isPlaying);
+    
     if (!synthsRef.current || !isPlaying || volume < 0.05) {
+      console.log('ClassicAudioEngine: Not generating music - synthsRef:', !!synthsRef.current, 'isPlaying:', isPlaying, 'volume:', volume, 'volumeThreshold: 0.05');
       setDebugInfo(`Not generating: playing=${isPlaying}, volume=${volume.toFixed(3)}`);
       return;
     }
 
     const now = Tone.now();
+    console.log('ClassicAudioEngine: Generating music now at time:', now);
     setDebugInfo(`Generating music: ${rootNote}, vol=${volume.toFixed(3)}`);
     
     try {
       // Bass follows voice
       const bassNote = rootNote.slice(0, -1) + Math.max(1, parseInt(rootNote.slice(-1)) - 1);
+      console.log('ClassicAudioEngine: Playing bass note:', bassNote);
       synthsRef.current.bass.triggerAttackRelease(bassNote, '4n', now);
 
       // Harmony
       if (volume > 0.1) {
         const harmonyNote = rootNote.slice(0, -1) + Math.min(6, parseInt(rootNote.slice(-1)) + 1);
+        console.log('ClassicAudioEngine: Playing harmony note:', harmonyNote);
         synthsRef.current.harmony.triggerAttackRelease(harmonyNote, '2n', now);
       }
 
       // Lead
       if (volume > 0.2) {
+        console.log('ClassicAudioEngine: Playing lead note:', rootNote);
         synthsRef.current.lead.triggerAttackRelease(rootNote, '8n', now);
       }
 
       setDebugInfo(`Music triggered: ${bassNote} (bass)`);
+      console.log('ClassicAudioEngine: Music generation completed successfully');
 
     } catch (error) {
-      console.warn('Error generating music:', error);
+      console.warn('ClassicAudioEngine: Error generating music:', error);
       setDebugInfo(`Music error: ${error}`);
     }
   };
@@ -282,15 +325,15 @@ export function ClassicAudioEngine({
             freqDataArray[index] = typeof value === 'number' ? (value + 140) * 255 / 280 : 0;
           });
           audioDataToSend = Array.from(freqDataArray);
-          console.log('ClassicAudioEngine: Real audio data:', audioDataToSend.length, 'samples, max:', Math.max(...audioDataToSend));
+          
         } catch (error) {
-          console.log('ClassicAudioEngine: Error getting real audio data:', error);
+          
         }
       }
       
       // If no real audio data, generate a visualization based on music state
       if (audioDataToSend.length === 0 || Math.max(...audioDataToSend) < 10) {
-        console.log('ClassicAudioEngine: No real audio data, generating fallback visualization');
+        
         // Generate waveform based on current playing state and emotion
         audioDataToSend = new Array(128).fill(0).map((_, i) => {
           const baseValue = 60 + Math.sin(Date.now() * 0.01 + i * 0.1) * 30;
@@ -332,6 +375,14 @@ export function ClassicAudioEngine({
     }
   };
 
+  // Auto-initialize when user starts playing
+  useEffect(() => {
+    if (isPlaying && !isInitialized) {
+      console.log('ClassicAudioEngine: Auto-initializing audio because user started playing');
+      initializeAudio();
+    }
+  }, [isPlaying, isInitialized]);
+
   // Always send some visualization data when playing
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -352,7 +403,7 @@ export function ClassicAudioEngine({
             const randomNoise = Math.random() * 20;
             return Math.max(0, Math.min(255, baseWave + chaosEffect + randomNoise));
           });
-          console.log('ClassicAudioEngine: Sending backup visualization data');
+          
           onAudioData(backupData);
         }
       }, 50); // 20 FPS fallback

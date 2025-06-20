@@ -15,14 +15,7 @@ export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
   const [visualMode, setVisualMode] = useState<'waveform' | 'particles' | 'mandala'>('waveform');
   const [showVisual, setShowVisual] = useState(true);
 
-  // Debug: log when audio data changes
-  useEffect(() => {
-    console.log('Visualizer: Audio data updated:', audioData.length, 'samples, playing:', isPlaying);
-    if (audioData.length > 0) {
-      console.log('Visualizer: Sample values:', audioData.slice(0, 10));
-      console.log('Visualizer: Max/Min values:', Math.max(...audioData), Math.min(...audioData));
-    }
-  }, [audioData, isPlaying]);
+
 
   const drawWaveform = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
     const width = canvas.width;
