@@ -113,7 +113,7 @@ export function EmotionWheel({ emotion, onChange }: EmotionWheelProps) {
 
   useEffect(() => {
     drawWheel();
-  }, [emotion]);
+  }, [emotion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col items-center">

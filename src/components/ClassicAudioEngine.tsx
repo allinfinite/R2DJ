@@ -21,10 +21,7 @@ interface ClassicAudioEngineProps {
 export function ClassicAudioEngine({
   selectedMood,
   voiceVolume,
-  voiceCadence,
-  keywordTrigger,
   isPlaying,
-  masterVolume,
   onAudioData,
   chaosX,
   chaosY,
@@ -92,9 +89,9 @@ export function ClassicAudioEngine({
 
       setIsInitialized(true);
       setDebugInfo('Audio engine initialized');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to initialize audio:', error);
-      setDebugInfo(`Init error: ${error.message}`);
+      setDebugInfo(`Init error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -144,7 +141,7 @@ export function ClassicAudioEngine({
       voiceInputRef.current.connect(pitchAnalyserRef.current!);
       setIsVoiceProcessingEnabled(true);
       startVoiceAnalysis();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to start voice processing:', error);
     }
   };

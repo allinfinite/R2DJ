@@ -16,7 +16,7 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
   const [isMuted, setIsMuted] = useState(false);
   const synthsRef = useRef<{ [key: string]: Tone.Synth | Tone.PolySynth }>({});
   const analyserRef = useRef<Tone.Analyser | null>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | null>(null);
 
   // Mood pack configurations
   const moodPacks = {
@@ -99,8 +99,6 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
     
     // Map emotion to musical parameters
     const bassFreq = pack.baseFreq * (0.5 + emotion.valence * 0.5);
-    const rhythm = 0.5 + emotion.arousal * 1.5; // BPM multiplier
-    const harmonicComplexity = emotion.valence * 3 + 1;
 
     // Set transport BPM based on arousal
     Tone.Transport.bpm.value = 60 + emotion.arousal * 60;
@@ -114,17 +112,7 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
     // Pad chords based on valence
     if (synthsRef.current.pad) {
       const chordRoot = Tone.Frequency(bassFreq * 1.5, 'hz').toNote();
-      const chord = [chordRoot];
-      
-      // Add harmony based on valence
-      if (emotion.valence > 0.6) {
-        chord.push(Tone.Frequency(bassFreq * 2, 'hz').toNote());
-        chord.push(Tone.Frequency(bassFreq * 2.5, 'hz').toNote());
-      } else if (emotion.valence < 0.4) {
-        chord.push(Tone.Frequency(bassFreq * 1.2, 'hz').toNote());
-      }
-      
-      synthsRef.current.pad.triggerAttackRelease(chord, '1n');
+      synthsRef.current.pad.triggerAttackRelease(chordRoot, '1n');
     }
 
     // Lead melody based on arousal
@@ -157,7 +145,7 @@ export function AudioEngine({ emotion, moodPack, isPlaying, onAudioData }: Audio
         }
       };
     }
-  }, [isPlaying, emotion, moodPack, isInitialized]);
+  }, [isPlaying, emotion, moodPack, isInitialized]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     return () => {

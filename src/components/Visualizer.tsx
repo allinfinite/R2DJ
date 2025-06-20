@@ -11,7 +11,7 @@ interface VisualizerProps {
 
 export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | null>(null);
   const [visualMode, setVisualMode] = useState<'waveform' | 'particles' | 'mandala'>('waveform');
   const [showVisual, setShowVisual] = useState(true);
 
@@ -165,7 +165,7 @@ export function Visualizer({ audioData, emotion, isPlaying }: VisualizerProps) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isPlaying, audioData, emotion, visualMode, showVisual]);
+  }, [isPlaying, audioData, emotion, visualMode, showVisual]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const visualModes = [
     { key: 'waveform', label: 'Waveform' },

@@ -131,7 +131,7 @@ export default function R2DJHome() {
             <div className="bg-white/5 rounded-xl p-6">
               <div className="text-2xl font-bold text-green-400 mb-2">2</div>
               <h3 className="font-semibold mb-2">Initialize Audio</h3>
-              <p className="text-gray-400 text-sm">Click "Initialize Audio Engine" and grant microphone permissions.</p>
+              <p className="text-gray-400 text-sm">Click &quot;Initialize Audio Engine&quot; and grant microphone permissions.</p>
             </div>
             <div className="bg-white/5 rounded-xl p-6">
               <div className="text-2xl font-bold text-purple-400 mb-2">3</div>
@@ -149,7 +149,7 @@ export default function R2DJHome() {
             <span>Open Source</span>
           </div>
           <p className="text-sm text-gray-500 mt-2">
-            "Where emotion meets sound, consciousness expands."
+            &quot;Where emotion meets sound, consciousness expands.&quot;
           </p>
         </footer>
       </div>

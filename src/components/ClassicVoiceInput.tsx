@@ -11,8 +11,7 @@ interface ClassicVoiceInputProps {
 
 export function ClassicVoiceInput({
   onVoiceVolume,
-  onVoiceCadence,
-  onKeywordTrigger
+  onVoiceCadence
 }: ClassicVoiceInputProps) {
   const [isListening, setIsListening] = useState(false);
   const [volume, setVolume] = useState(0);
@@ -103,7 +102,7 @@ export function ClassicVoiceInput({
         try {
           const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
           addDebug(`Current permission state: ${permission.state}`);
-        } catch (e) {
+        } catch {
           addDebug('Could not query permissions');
         }
       }
@@ -116,7 +115,7 @@ export function ClassicVoiceInput({
         audioInputs.forEach((device, i) => {
           addDebug(`Device ${i}: ${device.label || 'Unknown'}`);
         });
-      } catch (e) {
+      } catch {
         addDebug('Could not enumerate devices');
       }
 
@@ -151,8 +150,8 @@ export function ClassicVoiceInput({
           stream = await navigator.mediaDevices.getUserMedia(constraintOptions[i]);
           addDebug(`Success with constraint option ${i + 1}`);
           break;
-        } catch (error: any) {
-          addDebug(`Constraint option ${i + 1} failed: ${error.message}`);
+        } catch (error: unknown) {
+          addDebug(`Constraint option ${i + 1} failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
           if (i === constraintOptions.length - 1) {
             throw error; // Re-throw the last error
           }
@@ -203,23 +202,25 @@ export function ClassicVoiceInput({
       setPermissionStatus('🎧 Listening for audio...');
       analyzeAudio();
       
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Microphone error:', error);
-      addDebug(`ERROR: ${error.message}`);
+      addDebug(`ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`);
       
       let errorMessage = 'Unknown error';
-      if (error.name === 'NotAllowedError') {
-        errorMessage = 'Microphone permission denied. Check browser settings.';
-      } else if (error.name === 'NotFoundError') {
-        errorMessage = 'No microphone found. Check system audio settings.';
-      } else if (error.name === 'NotSupportedError') {
-        errorMessage = 'Microphone not supported in this browser.';
-      } else if (error.name === 'NotReadableError') {
-        errorMessage = 'Microphone in use by another application.';
-      } else if (error.name === 'OverconstrainedError') {
-        errorMessage = 'Microphone constraints not supported.';
-      } else {
-        errorMessage = error.message;
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          errorMessage = 'Microphone permission denied. Check browser settings.';
+        } else if (error.name === 'NotFoundError') {
+          errorMessage = 'No microphone found. Check system audio settings.';
+        } else if (error.name === 'NotSupportedError') {
+          errorMessage = 'Microphone not supported in this browser.';
+        } else if (error.name === 'NotReadableError') {
+          errorMessage = 'Microphone in use by another application.';
+        } else if (error.name === 'OverconstrainedError') {
+          errorMessage = 'Microphone constraints not supported.';
+        } else {
+          errorMessage = error.message;
+        }
       }
       
       setPermissionStatus(`❌ ${errorMessage}`);
@@ -410,7 +411,7 @@ export function ClassicVoiceInput({
     return () => {
       stopListening();
     };
-  }, []);
+  }, [stopListening]);
 
   return (
     <div className="space-y-3">

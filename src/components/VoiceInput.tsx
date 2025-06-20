@@ -18,7 +18,7 @@ export function VoiceInput({ onEmotionDetected }: VoiceInputProps) {
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number | null>(null);
 
   // Check network connectivity
   useEffect(() => {
@@ -113,7 +113,7 @@ export function VoiceInput({ onEmotionDetected }: VoiceInputProps) {
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isListening]);
+  }, [isListening]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const startListening = async () => {
     if (!isSupported) {
@@ -156,14 +156,18 @@ export function VoiceInput({ onEmotionDetected }: VoiceInputProps) {
 
       updateAudioLevel();
       setIsListening(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error accessing microphone:', error);
-      if (error.name === 'NotAllowedError') {
-        setError('Microphone access denied. Please allow microphone permissions and try again.');
-      } else if (error.name === 'NotFoundError') {
-        setError('No microphone found. Please connect a microphone and try again.');
+      if (error instanceof Error) {
+        if (error.name === 'NotAllowedError') {
+          setError('Microphone access denied. Please allow microphone permissions and try again.');
+        } else if (error.name === 'NotFoundError') {
+          setError('No microphone found. Please connect a microphone and try again.');
+        } else {
+          setError('Error accessing microphone: ' + error.message);
+        }
       } else {
-        setError('Error accessing microphone: ' + error.message);
+        setError('Error accessing microphone: Unknown error');
       }
     }
   };
@@ -314,7 +318,7 @@ export function VoiceInput({ onEmotionDetected }: VoiceInputProps) {
           <div className="space-y-2">
             <div className="text-sm text-gray-300">Last Detected:</div>
             <div className="bg-white/5 rounded-lg p-3 text-sm">
-              "{transcript}"
+              &quot;{transcript}&quot;
             </div>
           </div>
         )}
@@ -333,7 +337,7 @@ export function VoiceInput({ onEmotionDetected }: VoiceInputProps) {
 // Extend the Window interface for TypeScript
 declare global {
   interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
   }
 } 
